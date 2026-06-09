@@ -858,6 +858,26 @@ Interpreter.prototype.initObject = function(globalObject) {
   };
 
   // Static methods on Object.
+  wrapper = function freeze(obj) {
+    if (obj instanceof Interpreter.Object) {
+      Object.freeze(obj.properties);
+    }
+    return obj;
+  };
+  this.setProperty(this.OBJECT, 'freeze',
+      this.createNativeFunction(wrapper, false),
+      Interpreter.NONENUMERABLE_DESCRIPTOR);
+
+  wrapper = function isFrozen(obj) {
+    if (obj instanceof Interpreter.Object) {
+      return Object.isFrozen(obj.properties);
+    }
+    return Object.isFrozen(obj);
+  };
+  this.setProperty(this.OBJECT, 'isFrozen',
+      this.createNativeFunction(wrapper, false),
+      Interpreter.NONENUMERABLE_DESCRIPTOR);
+
   wrapper = function getOwnPropertyNames(obj) {
     throwIfNullUndefined(obj);
     var props = (obj instanceof Interpreter.Object) ? obj.properties : obj;
