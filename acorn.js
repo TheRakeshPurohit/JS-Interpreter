@@ -142,6 +142,12 @@
     // This value, if given, is stored in every node, whether
     // `locations` is on or off.
     directSourceFile: null,
+    // JS-Interpreter change:
+    // Start the parser in strict mode. This is used to parse code
+    // that is in strict mode by context, such as evals within strict
+    // functions.
+    strict: false,
+    // -- Neil Fraser, June 2026.
   };
 
   /**
@@ -1446,7 +1452,8 @@
     if (options.locations) {
       lastEndLoc = new line_loc_t();
     }
-    inFunction = strict = false;
+    inFunction = false;
+    strict = options.strict;
     labels = [];
     readToken();
 

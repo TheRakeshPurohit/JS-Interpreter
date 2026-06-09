@@ -361,15 +361,20 @@ Interpreter.prototype.taskCodeNumber_ = 0;
  * @private
  */
 Interpreter.prototype.parse_ = function(code, sourceFile) {
-   // Create a new options object, since Acorn will modify this object.
-   // Inheritance can't be used since Acorn uses hasOwnProperty.
-   // Object.assign can't be used since that's ES6.
-   var options = {};
-   for (var name in Interpreter.PARSE_OPTIONS) {
-     options[name] = Interpreter.PARSE_OPTIONS[name];
-   }
-   options.sourceFile = sourceFile;
-   return Interpreter.nativeGlobal.acorn.parse(code, options);
+  // Create a new options object, since Acorn will modify this object.
+  // Inheritance can't be used since Acorn uses hasOwnProperty.
+  // Object.assign can't be used since that's ES6.
+  var options = {};
+  for (var name in Interpreter.PARSE_OPTIONS) {
+    options[name] = Interpreter.PARSE_OPTIONS[name];
+  }
+  if (this.stateStack && this.getScope().strict) {
+    // If the current scope is strict, parse new code
+    // (evals, functions, setTimeout) in strict mode.
+    options.strict = true;
+  }
+  options.sourceFile = sourceFile;
+  return Interpreter.nativeGlobal.acorn.parse(code, options);
 };
 
 /**
@@ -681,7 +686,7 @@ Interpreter.prototype.initFunction = function(globalObject) {
     // Interestingly, the scope for constructed functions is the global scope,
     // even if they were constructed in some other scope.
     return thisInterpreter.createFunction(node, thisInterpreter.globalScope,
-       'anonymous');
+        'anonymous');
   };
   this.FUNCTION = this.createNativeFunction(wrapper, true);
 
@@ -4180,7 +4185,7 @@ Interpreter.prototype['stepCallExpression'] = function(stack, state, node) {
       } else {
         try {
           var ast = this.parse_(String(code),
-             'eval' + (this.evalCodeNumber_++));
+              'eval' + (this.evalCodeNumber_++));
         } catch (e) {
           // Acorn threw a SyntaxError.  Rethrow as a trappable error.
           this.throwException(this.SYNTAX_ERROR, 'Invalid code: ' + e.message);
