@@ -859,6 +859,8 @@ Interpreter.prototype.initObject = function(globalObject) {
 
   // Static methods on Object.
   wrapper = function freeze(obj) {
+    // ES5 throws if obj is not an object, but that was relaxed in ES6+.
+    // Technically JS-Interpreter should follow ES5, but we'll be lax.
     if (obj instanceof Interpreter.Object) {
       Object.freeze(obj.properties);
     }
@@ -869,12 +871,62 @@ Interpreter.prototype.initObject = function(globalObject) {
       Interpreter.NONENUMERABLE_DESCRIPTOR);
 
   wrapper = function isFrozen(obj) {
+    // ES5 throws if obj is not an object, but that was relaxed in ES6+.
+    // Technically JS-Interpreter should follow ES5, but we'll be lax.
     if (obj instanceof Interpreter.Object) {
       return Object.isFrozen(obj.properties);
     }
     return Object.isFrozen(obj);
   };
   this.setProperty(this.OBJECT, 'isFrozen',
+      this.createNativeFunction(wrapper, false),
+      Interpreter.NONENUMERABLE_DESCRIPTOR);
+
+  wrapper = function seal(obj) {
+    // ES5 throws if obj is not an object, but that was relaxed in ES6+.
+    // Technically JS-Interpreter should follow ES5, but we'll be lax.
+    if (obj instanceof Interpreter.Object) {
+      Object.seal(obj.properties);
+    }
+    return obj;
+  };
+  this.setProperty(this.OBJECT, 'seal',
+      this.createNativeFunction(wrapper, false),
+      Interpreter.NONENUMERABLE_DESCRIPTOR);
+
+  wrapper = function isSealed(obj) {
+    // ES5 throws if obj is not an object, but that was relaxed in ES6+.
+    // Technically JS-Interpreter should follow ES5, but we'll be lax.
+    if (obj instanceof Interpreter.Object) {
+      return Object.isSealed(obj.properties);
+    }
+    return Object.isSealed(obj);
+  };
+  this.setProperty(this.OBJECT, 'isSealed',
+      this.createNativeFunction(wrapper, false),
+      Interpreter.NONENUMERABLE_DESCRIPTOR);
+
+  wrapper = function preventExtensions(obj) {
+    // ES5 throws if obj is not an object, but that was relaxed in ES6+.
+    // Technically JS-Interpreter should follow ES5, but we'll be lax.
+    if (obj instanceof Interpreter.Object) {
+      Object.preventExtensions(obj.properties);
+    }
+    return obj;
+  };
+  this.setProperty(this.OBJECT, 'preventExtensions',
+      this.createNativeFunction(wrapper, false),
+      Interpreter.NONENUMERABLE_DESCRIPTOR);
+
+  wrapper = function isExtensible(obj) {
+    // ES5 throws if obj is not an object, but that was relaxed in ES6+.
+    // Technically JS-Interpreter should follow ES5, but we'll be lax.
+    if (obj instanceof Interpreter.Object) {
+      return Object.isExtensible(obj.properties);
+    }
+    return Object.isExtensible(obj);
+  };
+  this.setProperty(this.OBJECT, 'isExtensible',
       this.createNativeFunction(wrapper, false),
       Interpreter.NONENUMERABLE_DESCRIPTOR);
 
