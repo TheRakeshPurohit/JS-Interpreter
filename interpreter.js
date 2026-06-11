@@ -995,10 +995,6 @@ Interpreter.prototype.initObject = function(globalObject) {
       thisInterpreter.throwException(thisInterpreter.TYPE_ERROR,
           'Property description must be an object');
     }
-    if (obj.preventExtensions && !(prop in obj.properties)) {
-      thisInterpreter.throwException(thisInterpreter.TYPE_ERROR,
-          "Can't define property '" + prop + "', object is not extensible");
-    }
     // The polyfill guarantees no inheritance and no getter functions.
     // Therefore the descriptor properties map is the native object needed.
     thisInterpreter.setProperty(obj, prop, Interpreter.VALUE_IN_DESCRIPTOR,
@@ -1079,23 +1075,6 @@ Interpreter.prototype.initObject = function(globalObject) {
     return thisInterpreter.getPrototype(obj);
   };
   this.setProperty(this.OBJECT, 'getPrototypeOf',
-      this.createNativeFunction(wrapper, false),
-      Interpreter.NONENUMERABLE_DESCRIPTOR);
-
-  wrapper = function isExtensible(obj) {
-    return Boolean(obj) && !obj.preventExtensions;
-  };
-  this.setProperty(this.OBJECT, 'isExtensible',
-      this.createNativeFunction(wrapper, false),
-      Interpreter.NONENUMERABLE_DESCRIPTOR);
-
-  wrapper = function preventExtensions(obj) {
-    if (obj instanceof Interpreter.Object) {
-      obj.preventExtensions = true;
-    }
-    return obj;
-  };
-  this.setProperty(this.OBJECT, 'preventExtensions',
       this.createNativeFunction(wrapper, false),
       Interpreter.NONENUMERABLE_DESCRIPTOR);
 
@@ -3003,13 +2982,6 @@ Interpreter.prototype.setProperty = function(obj, name, value, opt_descriptor) {
       // Increase length if this index is larger.
       obj.properties.length = Math.max(len, i + 1);
     }
-  }
-  if (obj.preventExtensions && !(name in obj.properties)) {
-    if (strict) {
-      this.throwException(this.TYPE_ERROR, "Can't add property '" + name +
-                          "', object is not extensible");
-    }
-    return;
   }
   if (opt_descriptor) {
     // Define the property.
