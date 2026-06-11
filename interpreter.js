@@ -330,6 +330,12 @@ Interpreter.prototype['REGEXP_THREAD_TIMEOUT'] = 1000;
 Interpreter.prototype['POLYFILL_TIMEOUT'] = 1000;
 
 /**
+ * Length of time (in ms) to allow a toString or valueOf function to execute
+ * before terminating it.
+ */
+Interpreter.prototype['TOSTRING_VALUEOF_TIMEOUT'] = 1000;
+
+/**
  * Flag indicating that a getter function needs to be called immediately.
  * @private
  */
@@ -797,19 +803,14 @@ Interpreter.prototype.initFunction = function(globalObject) {
   // Function has no parent to inherit from, so it needs its own mandatory
   // toString and valueOf functions.
   wrapper = function toString() {
-    return String(this);
+    return 'function() { ... }';
   };
   this.setNativeFunctionPrototype(this.FUNCTION, 'toString', wrapper);
-  this.setProperty(this.FUNCTION, 'toString',
-      this.createNativeFunction(wrapper, false),
-      Interpreter.NONENUMERABLE_DESCRIPTOR);
+
   wrapper = function valueOf() {
-    return this.valueOf();
+    return this;
   };
   this.setNativeFunctionPrototype(this.FUNCTION, 'valueOf', wrapper);
-  this.setProperty(this.FUNCTION, 'valueOf',
-      this.createNativeFunction(wrapper, false),
-      Interpreter.NONENUMERABLE_DESCRIPTOR);
 };
 
 /**
@@ -1079,12 +1080,28 @@ Interpreter.prototype.initObject = function(globalObject) {
       Interpreter.NONENUMERABLE_DESCRIPTOR);
 
   // Instance methods on Object.
-  this.setNativeFunctionPrototype(this.OBJECT, 'toString',
-      Interpreter.Object.prototype.toString);
-  this.setNativeFunctionPrototype(this.OBJECT, 'toLocaleString',
-      Interpreter.Object.prototype.toString);
-  this.setNativeFunctionPrototype(this.OBJECT, 'valueOf',
-      Interpreter.Object.prototype.valueOf);
+  wrapper = function toString() {
+    if (this instanceof Interpreter.Object) {
+      if (this.data !== undefined) {
+        // RegExp, Date, and boxed primitives.
+        return String(this.data);
+      }
+      return '[object ' + this.class + ']';
+    }
+    // Primitive.
+    return String(this);
+  };
+  this.setNativeFunctionPrototype(this.OBJECT, 'toString', wrapper);
+  this.setNativeFunctionPrototype(this.OBJECT, 'toLocaleString', wrapper);
+
+  wrapper = function valueOf() {
+    if (this instanceof Interpreter.Object && this.data !== undefined) {
+      // RegExp, Date, and boxed primitives.
+      return this.data;
+    }
+    return this;
+  };
+  this.setNativeFunctionPrototype(this.OBJECT, 'valueOf', wrapper);
 
   wrapper = function hasOwnProperty(prop) {
     throwIfNullUndefined(this);
@@ -1170,6 +1187,35 @@ Interpreter.prototype.initArray = function(globalObject) {
   this.setProperty(this.ARRAY_PROTO, 'length', 0,
       {'configurable': false, 'enumerable': false, 'writable': true});
   this.ARRAY_PROTO.class = 'Array';
+
+  wrapper = function toString() {
+    // Array contents must not have cycles.
+    var cycles = Interpreter.toStringCycles_;
+    cycles.push(this);
+    try {
+      var strs = [];
+      // Truncate very long strings.  This is not part of the spec,
+      // but it prevents hanging the interpreter for gigantic arrays.
+      var maxLength = this.properties.length;
+      var truncated = false;
+      if (maxLength > 1024) {
+        maxLength = 1000;
+        truncated = true;
+      }
+      for (var i = 0; i < maxLength; i++) {
+        var value = this.properties[i];
+        strs[i] = ((value instanceof Interpreter.Object) &&
+            cycles.indexOf(value) !== -1) ? '...' : value;
+      }
+      if (truncated) {
+        strs.push('...');
+      }
+    } finally {
+      cycles.pop();
+    }
+    return strs.join(',');
+  };
+  this.setNativeFunctionPrototype(this.ARRAY, 'toString', wrapper);
 
   this.polyfills_.push(
 /* POLYFILL START */
@@ -2230,6 +2276,39 @@ Interpreter.prototype.initError = function(globalObject) {
       Interpreter.NONENUMERABLE_DESCRIPTOR);
   this.setProperty(this.ERROR.properties['prototype'], 'name', 'Error',
       Interpreter.NONENUMERABLE_DESCRIPTOR);
+
+  var wrapper = function toString() {
+    // Error name and message properties must not have cycles.
+    var cycles = Interpreter.toStringCycles_;
+    if (cycles.indexOf(this) !== -1) {
+      return '[object Error]';
+    }
+    var name, message;
+    // Bug: Does not support getters and setters for name or message.
+    var obj = this;
+    do {
+      if ('name' in obj.properties) {
+        name = obj.properties.name;
+        break;
+      }
+    } while ((obj = obj.proto));
+    obj = this;
+    do {
+      if ('message' in obj.properties) {
+        message = obj.properties.message;
+        break;
+      }
+    } while ((obj = obj.proto));
+    cycles.push(this);
+    try {
+      name = name && String(name);
+      message = message && String(message);
+    } finally {
+      cycles.pop();
+    }
+    return message ? name + ': ' + message : String(name);
+  };
+  this.setNativeFunctionPrototype(this.ERROR, 'toString', wrapper);
 
   var createErrorSubclass = function(name) {
     var constructor = thisInterpreter.createNativeFunction(
@@ -3702,6 +3781,44 @@ Interpreter.prototype.setStateStack = function(newStack) {
 };
 
 /**
+ * Runs a function on a pseudo-object.  Usually 'toString' or 'valueOf'.
+ * The function does not step, instead it times out if it takes too long.
+ * @param {!Interpreter.Object} pseudoObj
+ * @param {string} funcName Name of function to run.
+ * @returns {Interpreter.Value} Value returned by the function.
+ */
+Interpreter.prototype.runFunction = function(pseudoObj, funcName) {
+  var oldStack = this.stateStack;
+  var endTime = Date.now() + this.TOSTRING_VALUEOF_TIMEOUT;
+  // Create a new Program that runs this one function.
+  var code = 'this.' + funcName + '();';
+  var ast = this.parse_(code, 'runFunctionCode');
+  var programState = new Interpreter.State(ast, this.globalScope);
+  programState.done = false;
+  try {
+    this.stateStack = [programState];
+    this.step();  // Process the Program node.
+    this.step();  // Process the ExpressionStatement node.
+    this.step();  // First step of the CallExpression node.
+    // Reach into the MemberExpression state and set the object.
+    // The code above says 'this' but we want it to be the pseudoObj.
+    const state = this.stateStack[this.stateStack.length - 1];
+    state.value = pseudoObj;
+    state.doneObject_ = true;
+    // Continue processing the CallExpression node.
+    while (!this.paused_ && this.step()) {
+      if (endTime < Date.now()) {
+        this.throwException(this.EVAL_ERROR,
+            'Timeout while calling ' + funcName);
+      }
+    }
+  } finally {
+    this.stateStack = oldStack;
+  }
+  return this.value;
+};
+
+/**
  * Typedef for JS values.
  * @typedef {!Interpreter.Object|boolean|number|string|undefined|null}
  */
@@ -3759,81 +3876,16 @@ Interpreter.Object.prototype.data = null;
  * @override
  */
 Interpreter.Object.prototype.toString = function() {
-  if (!Interpreter.currentInterpreter_) {
-    // Called from outside an interpreter.
-    return '[object Interpreter.Object]';
-  }
   if (!(this instanceof Interpreter.Object)) {
     // Primitive value.
     return String(this);
   }
-
-  if (this.class === 'Array') {
-    // Array contents must not have cycles.
-    var cycles = Interpreter.toStringCycles_;
-    cycles.push(this);
-    try {
-      var strs = [];
-      // Truncate very long strings.  This is not part of the spec,
-      // but it prevents hanging the interpreter for gigantic arrays.
-      var maxLength = this.properties.length;
-      var truncated = false;
-      if (maxLength > 1024) {
-        maxLength = 1000;
-        truncated = true;
-      }
-      for (var i = 0; i < maxLength; i++) {
-        var value = this.properties[i];
-        strs[i] = ((value instanceof Interpreter.Object) &&
-            cycles.indexOf(value) !== -1) ? '...' : value;
-      }
-      if (truncated) {
-        strs.push('...');
-      }
-    } finally {
-      cycles.pop();
-    }
-    return strs.join(',');
+  if (!Interpreter.currentInterpreter_) {
+    // Called from outside an interpreter.
+    return '[object Interpreter.Object]';
   }
-
-  if (this.class === 'Error') {
-    // Error name and message properties must not have cycles.
-    var cycles = Interpreter.toStringCycles_;
-    if (cycles.indexOf(this) !== -1) {
-      return '[object Error]';
-    }
-    var name, message;
-    // Bug: Does not support getters and setters for name or message.
-    var obj = this;
-    do {
-      if ('name' in obj.properties) {
-        name = obj.properties.name;
-        break;
-      }
-    } while ((obj = obj.proto));
-    obj = this;
-    do {
-      if ('message' in obj.properties) {
-        message = obj.properties.message;
-        break;
-      }
-    } while ((obj = obj.proto));
-    cycles.push(this);
-    try {
-      name = name && String(name);
-      message = message && String(message);
-    } finally {
-      cycles.pop();
-    }
-    return message ? name + ': ' + message : String(name);
-  }
-
-  if (this.data !== null) {
-    // RegExp, Date, and boxed primitives.
-    return String(this.data);
-  }
-
-  return '[object ' + this.class + ']';
+  Interpreter.currentInterpreter_.runFunction(this, 'toString');
+  return String(Interpreter.currentInterpreter_.value);
 };
 
 /**
@@ -3842,18 +3894,16 @@ Interpreter.Object.prototype.toString = function() {
  * @override
  */
 Interpreter.Object.prototype.valueOf = function() {
+  if (!(this instanceof Interpreter.Object)) {
+    // Primitive value.
+    return this;
+  }
   if (!Interpreter.currentInterpreter_) {
     // Called from outside an interpreter.
     return this;
   }
-  if (this.data === undefined || this.data === null ||
-      this.data instanceof RegExp) {
-    return this;  // An Object, RegExp, or primitive.
-  }
-  if (this.data instanceof Date) {
-    return this.data.valueOf();  // Milliseconds.
-  }
-  return /** @type {(boolean|number|string)} */ (this.data);  // Boxed primitive.
+  Interpreter.currentInterpreter_.runFunction(this, 'valueOf');
+  return Interpreter.currentInterpreter_.value;
 };
 
 /**
