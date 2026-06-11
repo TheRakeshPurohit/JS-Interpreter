@@ -1097,7 +1097,7 @@ Interpreter.prototype.initObject = function(globalObject) {
   wrapper = function valueOf() {
     if (this instanceof Interpreter.Object && this.data !== undefined) {
       // RegExp, Date, and boxed primitives.
-      return this.data;
+      return this.data.valueOf();
     }
     return this;
   };
