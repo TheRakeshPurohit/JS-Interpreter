@@ -3867,8 +3867,8 @@ Interpreter.Object.prototype.proto = null;
 /** @type {string} */
 Interpreter.Object.prototype.class = 'Object';
 
-/** @type {Date|RegExp|boolean|number|string|null} */
-Interpreter.Object.prototype.data = null;
+/** @type {Date|RegExp|boolean|number|string|undefined} */
+Interpreter.Object.prototype.data = undefined;
 
 /**
  * Convert this object into a string.
