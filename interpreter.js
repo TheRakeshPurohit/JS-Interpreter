@@ -1629,7 +1629,7 @@ Interpreter.prototype.initArray = function(globalObject) {
   "createArrayMethod_('sort',",
     "function(opt_comp) {",  // Bubble sort!
       "if (!this) throw TypeError();",
-      "if (typeof opt_comp !== 'function') {",
+      "if (opt_comp !== undefined && typeof opt_comp !== 'function') {",
         "throw TypeError('invalid Array.prototype.sort argument');",
       "}",
       "for (var i = 0; i < this.length; i++) {",
