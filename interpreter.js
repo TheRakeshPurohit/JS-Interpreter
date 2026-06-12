@@ -700,7 +700,7 @@ Interpreter.prototype.initFunction = function(globalObject) {
       Interpreter.NONENUMERABLE_DESCRIPTOR);
   // Throw away the created prototype and use the root prototype.
   this.setProperty(this.FUNCTION, 'prototype', this.FUNCTION_PROTO,
-      Interpreter.NONENUMERABLE_DESCRIPTOR);
+      Interpreter.NONCONFIGURABLE_READONLY_NONENUMERABLE_DESCRIPTOR);
 
   // Configure Function.prototype.
   this.setProperty(this.FUNCTION_PROTO, 'constructor', this.FUNCTION,
@@ -845,7 +845,7 @@ Interpreter.prototype.initObject = function(globalObject) {
   this.OBJECT = this.createNativeFunction(wrapper, true);
   // Throw away the created prototype and use the root prototype.
   this.setProperty(this.OBJECT, 'prototype', this.OBJECT_PROTO,
-                   Interpreter.NONENUMERABLE_DESCRIPTOR);
+                   Interpreter.NONCONFIGURABLE_READONLY_NONENUMERABLE_DESCRIPTOR);
   this.setProperty(this.OBJECT_PROTO, 'constructor', this.OBJECT,
                    Interpreter.NONENUMERABLE_DESCRIPTOR);
   this.setProperty(globalObject, 'Object', this.OBJECT,
@@ -1697,6 +1697,7 @@ Interpreter.prototype.initString = function(globalObject) {
   this.STRING = this.createNativeFunction(wrapper, true);
   this.setProperty(globalObject, 'String', this.STRING,
       Interpreter.NONENUMERABLE_DESCRIPTOR);
+  this.STRING.properties['prototype'].data = '';
 
   // Static methods on String.
   this.setProperty(this.STRING, 'fromCharCode',
@@ -1950,6 +1951,7 @@ Interpreter.prototype.initBoolean = function(globalObject) {
   this.BOOLEAN = this.createNativeFunction(wrapper, true);
   this.setProperty(globalObject, 'Boolean', this.BOOLEAN,
       Interpreter.NONENUMERABLE_DESCRIPTOR);
+  this.BOOLEAN.properties['prototype'].data = false;
 };
 
 /**
@@ -1974,6 +1976,7 @@ Interpreter.prototype.initNumber = function(globalObject) {
   this.NUMBER = this.createNativeFunction(wrapper, true);
   this.setProperty(globalObject, 'Number', this.NUMBER,
       Interpreter.NONENUMERABLE_DESCRIPTOR);
+  this.NUMBER.properties['prototype'].data = 0;
 
   var numConsts = ['MAX_VALUE', 'MIN_VALUE', 'NaN', 'NEGATIVE_INFINITY',
                    'POSITIVE_INFINITY'];
@@ -2157,13 +2160,14 @@ Interpreter.prototype.initRegExp = function(globalObject) {
   this.setProperty(globalObject, 'RegExp', this.REGEXP,
       Interpreter.NONENUMERABLE_DESCRIPTOR);
 
-  this.setProperty(this.REGEXP.properties['prototype'], 'global', undefined,
+  this.REGEXP_PROTO.data = /(?:)/;
+  this.setProperty(this.REGEXP_PROTO, 'global', undefined,
       Interpreter.READONLY_NONENUMERABLE_DESCRIPTOR);
-  this.setProperty(this.REGEXP.properties['prototype'], 'ignoreCase', undefined,
+  this.setProperty(this.REGEXP_PROTO, 'ignoreCase', undefined,
       Interpreter.READONLY_NONENUMERABLE_DESCRIPTOR);
-  this.setProperty(this.REGEXP.properties['prototype'], 'multiline', undefined,
+  this.setProperty(this.REGEXP_PROTO, 'multiline', undefined,
       Interpreter.READONLY_NONENUMERABLE_DESCRIPTOR);
-  this.setProperty(this.REGEXP.properties['prototype'], 'source', '(?:)',
+  this.setProperty(this.REGEXP_PROTO, 'source', '(?:)',
       Interpreter.READONLY_NONENUMERABLE_DESCRIPTOR);
 
   // Use polyfill to avoid complexity of regexp threads.
@@ -2326,7 +2330,7 @@ Interpreter.prototype.initError = function(globalObject) {
         }, true);
     thisInterpreter.setProperty(constructor, 'prototype',
         thisInterpreter.createObject(thisInterpreter.ERROR),
-        Interpreter.NONENUMERABLE_DESCRIPTOR);
+        Interpreter.NONCONFIGURABLE_READONLY_NONENUMERABLE_DESCRIPTOR);
     thisInterpreter.setProperty(constructor.properties['prototype'], 'name',
         name, Interpreter.NONENUMERABLE_DESCRIPTOR);
     thisInterpreter.setProperty(globalObject, name, constructor,
