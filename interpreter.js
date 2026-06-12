@@ -3804,6 +3804,8 @@ Interpreter.prototype.setStateStack = function(newStack) {
  */
 Interpreter.prototype.runFunction = function(pseudoObj, funcName) {
   var oldStack = this.stateStack;
+  var oldPaused = this.paused_;
+  this.paused_ = false;
   var endTime = Date.now() + this.TOSTRING_VALUEOF_TIMEOUT;
   // Create a new Program that runs this one function.
   var code = 'this.' + funcName + '();';
@@ -3829,6 +3831,7 @@ Interpreter.prototype.runFunction = function(pseudoObj, funcName) {
     }
   } finally {
     this.stateStack = oldStack;
+    this.paused_ = oldPaused;
   }
   return this.value;
 };
@@ -3900,7 +3903,13 @@ Interpreter.Object.prototype.toString = function() {
     return '[object Interpreter.Object]';
   }
   Interpreter.currentInterpreter_.runFunction(this, 'toString');
-  return String(Interpreter.currentInterpreter_.value);
+  var value = Interpreter.currentInterpreter_.value;
+  if (value instanceof Interpreter.Object) {
+    Interpreter.currentInterpreter_.throwException(
+        Interpreter.currentInterpreter_.TYPE_ERROR,
+        'toString may not return an object');
+  }
+  return String(value);
 };
 
 /**
