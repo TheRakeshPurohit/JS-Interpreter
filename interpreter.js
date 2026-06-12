@@ -2378,7 +2378,11 @@ Interpreter.prototype.initJSON = function(globalObject) {
   this.setProperty(globalObject, 'JSON', myJSON,
       Interpreter.NONENUMERABLE_DESCRIPTOR);
 
-  wrapper = function parse(text) {
+  wrapper = function parse(text, reviver) {
+    if (reviver && reviver.class === 'Function') {
+      thisInterpreter.throwException(thisInterpreter.TYPE_ERROR,
+          'Reviver function on JSON.parse not supported');
+    }
     try {
       var nativeObj = JSON.parse(String(text));
     } catch (e) {
@@ -2391,7 +2395,7 @@ Interpreter.prototype.initJSON = function(globalObject) {
   wrapper = function stringify(value, replacer, space) {
     if (replacer && replacer.class === 'Function') {
       thisInterpreter.throwException(thisInterpreter.TYPE_ERROR,
-          'Function replacer on JSON.stringify not supported');
+          'Replacer function on JSON.stringify not supported');
     } else if (replacer && replacer.class === 'Array') {
       replacer = thisInterpreter.pseudoToNative(replacer);
       replacer = replacer.filter(function(word) {
