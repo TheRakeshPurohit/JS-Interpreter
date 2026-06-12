@@ -1095,8 +1095,9 @@ Interpreter.prototype.initObject = function(globalObject) {
   this.setNativeFunctionPrototype(this.OBJECT, 'toLocaleString', wrapper);
 
   wrapper = function valueOf() {
-    if (this instanceof Interpreter.Object && this.data !== undefined) {
-      // RegExp, Date, and boxed primitives.
+    if (this instanceof Interpreter.Object &&
+        (typeof this.data === 'string' || typeof this.data === 'number' || typeof this.data === 'boolean')) {
+      // Boxed primitives.
       return this.data.valueOf();
     }
     return this;
