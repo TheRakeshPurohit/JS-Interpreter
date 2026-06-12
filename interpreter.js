@@ -2405,6 +2405,9 @@ Interpreter.prototype.initJSON = function(globalObject) {
       space = undefined;
     }
 
+    if (value === undefined || thisInterpreter.isa(value, thisInterpreter.FUNCTION)) {
+      return undefined;
+    }
     var nativeObj = thisInterpreter.pseudoToNative(value);
     try {
       var str = JSON.stringify(nativeObj, replacer, space);
@@ -2875,6 +2878,9 @@ Interpreter.prototype.pseudoToNative = function(pseudoObj, opt_cycles) {
   // Functions are not supported for security reasons.  Probably not a great
   // idea for the JS-Interpreter to be able to create native JS functions.
   // Still, if that floats your boat, this is where you'd add it.  Good luck.
+  if (this.isa(pseudoObj, this.FUNCTION)) {  // Function.
+    return null;  // Consistent with JSON.stringify of functions.
+  }
 
   var nativeObj = this.isa(pseudoObj, this.ARRAY) ? [] : {};
   cycles.native.push(nativeObj);
@@ -3802,7 +3808,7 @@ Interpreter.prototype.runFunction = function(pseudoObj, funcName) {
     this.step();  // First step of the CallExpression node.
     // Reach into the MemberExpression state and set the object.
     // The code above says 'this' but we want it to be the pseudoObj.
-    const state = this.stateStack[this.stateStack.length - 1];
+    var state = this.stateStack[this.stateStack.length - 1];
     state.value = pseudoObj;
     state.doneObject_ = true;
     // Continue processing the CallExpression node.
